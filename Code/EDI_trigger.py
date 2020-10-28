@@ -9,12 +9,13 @@ import time
 import os
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import edi_to_csv_v2.2ai
+import EDI_to_csv_v3
 
 class ExampleHandler(FileSystemEventHandler):
     def on_created(self, event): # when file is created
-        os.system("EDI_to_csv_v2.2ai.py 1") # run code to process file 
         print("Got event for file %s" % event.src_path) 
+        EDI_to_csv_v3.process_edi(event.src_path)
+        
 
 observer = Observer()
 event_handler = ExampleHandler() # create event handler
