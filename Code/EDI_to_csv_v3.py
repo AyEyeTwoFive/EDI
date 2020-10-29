@@ -167,8 +167,10 @@ def process_edi(infile):
             elif line[1] == 'DI':
                 out = pd.concat((out, pd.DataFrame([line[2:5]], columns = ['Invoice_Number','','Invoice_Date'])), axis=1)
     
+    outfile = infile[0:infile.rfind("/")+1]
+    
     if 'McKesson Plasma & Biologics LLC' in out1.values:
-        outfile = 'McK-BIOLOGICS'
+        outfile += 'McK-BIOLOGICS'
         
     if file852:
         outfile += '_852_'
@@ -203,6 +205,9 @@ def process_edi(infile):
         print("All QC checks passed")
     else:
         print("The following QC checks failed:")
+        for l in range(len(logs)):
+            if logs.results[l] == 'Fail':
+                print(logs.tests[l])
 
 def QC_checks(out1, file852):
     tests = []
@@ -214,6 +219,20 @@ def QC_checks(out1, file852):
             results.append("Pass")
         else:
             results.append("Fail")
+    else:
+        tests.append("Transaction Set ID Should be 867")
+        if all(out1['Transaction_Set_ID'] == '867'):
+            results.append("Pass")
+        else:
+            results.append("Fail")
+    
+    if not file852:
+        tests.append("Transaction Set Purpose Code Should be 00")
+        if all(out1['Transaction_Set_Purpose_Code'] == '00'):
+            results.append("Pass")
+        else:
+            results.append("Fail")
+            
             
     tests.append("Report Start Date should be formatted as 'yyyymmdd'")
     temp = True
@@ -227,13 +246,50 @@ def QC_checks(out1, file852):
     else:
         results.append("Fail")
         
+    if not file852:
+        tests.append("Report Type Code Should be SS")
+        if all(out1['Report_Type_Code'] == 'SS'):
+            results.append("Pass")
+        else:
+            results.append("Fail")        
+        
+        
     if file852:
         tests.append("Entity Identifier Code should always be 'ST'")
         if all(out1['Entity_Identifier_Code3']  == 'ST'):
             results.append("Pass")
         else:
             results.append("Fail")
+    else:
+        tests.append("Entity Identifier Code should be DB or MF")
+        if all(c in ['DB','MF'] for c in out1['Entity_Identifier_Code1']) and all(c in ['DB','MF'] for c 
+                                                                                  in out1['Entity_Identifier_Code2']):
+            results.append("Pass")
+        else:
+            results.append("Fail") 
             
+    if not file852:
+        idquals = out1.columns.intersection(['Identification_Code_Qualifier1', 'Identification_Code_Qualifier2',
+                                          'Identification_Code_Qualifier3'])
+        tests.append("Identification Code Qualifier should be one of 11, 21, UL, 1, 92")
+        for q in idquals:
+            if any(c not in ['11','21','UL','1','92'] for c in out1[q]):
+                results.append("Fail")
+        else:
+                results.append("Pass")        
+    
+    tests.append("State recognized as a valid US state")
+    states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+          "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
+          "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+          "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
+    if all(c in states for c in out1['State_Province_Code']):
+        results.append("Pass")
+    else:
+        results.append("Fail")
+
+    
     if file852:        
         tests.append("Product/Service ID2 should be one of 73380470001, 73380471509, 99999999999")
         if all(c in ['73380470001','73380471509','99999999999'] for c in out1['Product_Service_ID2']):
@@ -243,20 +299,51 @@ def QC_checks(out1, file852):
         
     if file852:
         tests.append("Activity Code Recognized")
-        if all(c in ['QX','QS','QO','QA','QP','QR','QD','WQ','LS','QW','QZ'
-                'Q2','Q3','QH','QC','RE','QK','OP','QI','OF','PA','QN','PO','BS','MS','QE','QF','OQ'
-                'QM','QL','Q1','QT','TS'] for c in out1['Activity_Code']):
+        activity_codes =  ['QX','QS','QO','QA','QP','QR','QD','WQ','LS','QW','QZ','Q2','Q3','QH','QC','RE','QK','OP','QI','OF',
+                           'PA','QN','PO','BS','MS','QE','QF','OQ', 'QM','QL','Q1','QT','TS']
+        if all(c in activity_codes for c in out1['Activity_Code']):
                 results.append("Pass")
         else:
                 results.append("Fail")
 
+    if not file852:
+        tests.append("Quantity Qualifier should be 32 or 76")
+        if all(c in ['32','76'] for c in out1['Quantity_Qualifier']):
+            results.append("Pass")
+        else:
+            results.append("Fail")
+                
+               
     tests.append("Quantities should be non-negative")
     if all(pd.to_numeric(out1['Quantity']) >= 0):
             results.append("Pass")
     else:
             results.append("Fail")
             
+    if not file852:
+        tests.append("Unit Price should be numeric")
+        if pd.to_numeric(out1['Unit_Price'], errors='coerce').notnull().all():
+            results.append("Pass")
+        else:
+            results.append("Fail")
+            
+    if not file852:
+        tests.append("Invoice Date should be formatted as 'yyyymmdd'")
+        temp = True
+        for d in out1['Invoice_Date']:
+            try:
+                datetime.datetime.strptime(d, '%Y%m%d')
+            except ValueError:
+                temp = False
+        if temp:
+            results.append("Pass")
+        else:
+            results.append("Fail")       
+                
+            
     return pd.DataFrame({'tests':tests, 'results':results})
+
+
     
 
 # Get input file name from command line and read it 
