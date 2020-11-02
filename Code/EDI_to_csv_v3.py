@@ -169,7 +169,7 @@ def process_edi(infile):
     
     outfile = infile[0:infile.rfind("/")+1]
     
-    if 'McKesson Plasma & Biologics LLC' in out1.values:
+    if 'McKesson Plasma & Biologics LLC' in out1.values or 'MCKESSON PLASMA BIOLOGICS' in out1.values:
         outfile += 'McK-BIOLOGICS'
         
     if file852:
@@ -278,16 +278,17 @@ def QC_checks(out1, file852):
         else:
                 results.append("Pass")        
     
-    tests.append("State recognized as a valid US state")
-    states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
-          "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
-          "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
-          "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
-          "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
-    if all(c in states for c in out1['State_Province_Code']):
-        results.append("Pass")
-    else:
-        results.append("Fail")
+    if 'State_Province_Code' in out1:
+        tests.append("State recognized as a valid US state")
+        states = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DC", "DE", "FL", "GA", 
+              "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", 
+              "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", 
+              "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", 
+              "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
+        if all(c in states for c in out1['State_Province_Code']):
+            results.append("Pass")
+        else:
+            results.append("Fail")
 
     
     if file852:        
@@ -343,7 +344,8 @@ def QC_checks(out1, file852):
             
     return pd.DataFrame({'tests':tests, 'results':results})
 
-
+def sendlogs(logs):
+    print(logs)
     
 
 # Get input file name from command line and read it 
