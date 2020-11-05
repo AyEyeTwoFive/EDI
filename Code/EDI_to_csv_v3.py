@@ -9,6 +9,8 @@ import pandas as pd
 import sys
 import time
 import datetime
+import requests
+import json
 
 def process_edi(infile):
     t0 = time.time()
@@ -65,10 +67,16 @@ def process_edi(infile):
                     out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code2','Name2'])), axis=1)
             if line[1] == 'ST':
                 if len(line) == 5:
-                    out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code3','Name2'\
+                    out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code3','Name3'\
                             , 'Identification_Code_Qualifier3', 'Identification_Code3'])), axis=1)
                 elif len(line) == 3:
                     out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code3','Name3'])), axis=1) 
+            if line[1] == 'SU':
+                if len(line) == 5:
+                    out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code4','Name4'\
+                            , 'Identification_Code_Qualifier4', 'Identification_Code4'])), axis=1)
+                elif len(line) == 3:
+                    out = pd.concat((out, pd.DataFrame([line[1:5]], columns = ['Entity_Identifier_Code4','Name4'])), axis=1)
         elif line[0] == 'PTD':
             cols=pd.Series(out.columns)
             for dup in cols[cols.duplicated()].unique(): 
@@ -88,6 +96,8 @@ def process_edi(infile):
                 out = pd.concat((out, pd.DataFrame([line[1:3]], columns = ['Reference_ID_Qualifier2', 'Reference_ID2'])), axis=1)
             if line[1] == 'QK':
                 out = pd.concat((out, pd.DataFrame([line[1:3]], columns = ['Reference_ID_Qualifier3', 'Reference_ID3'])), axis=1)
+            if line[1] == 'CT':
+                out = pd.concat((out, pd.DataFrame([line[1:3]], columns = ['Reference_ID_Qualifier4', 'Reference_ID4'])), axis=1)
         elif line[0] == 'SII':
             out = pd.concat((out, pd.DataFrame([line[1:8]], columns =['Product_Service_ID_Qualifier',\
                 'Item_NDC_UPC_Number','Quantity', 'UOM',\
@@ -171,6 +181,8 @@ def process_edi(infile):
     
     if 'McKesson Plasma & Biologics LLC' in out1.values or 'MCKESSON PLASMA BIOLOGICS' in out1.values:
         outfile += 'McK-BIOLOGICS'
+    elif 'McKesson Specialty Health-Memphis' in out1.values:
+        outfile += 'McK-SPECIALTY'
         
     if file852:
         outfile += '_852_'
@@ -208,6 +220,8 @@ def process_edi(infile):
         for l in range(len(logs)):
             if logs.results[l] == 'Fail':
                 print(logs.tests[l])
+                
+    # sendlogs(logs)
 
 def QC_checks(out1, file852):
     tests = []
@@ -261,22 +275,29 @@ def QC_checks(out1, file852):
         else:
             results.append("Fail")
     else:
-        tests.append("Entity Identifier Code should be DB or MF")
-        if all(c in ['DB','MF'] for c in out1['Entity_Identifier_Code1']) and all(c in ['DB','MF'] for c 
-                                                                                  in out1['Entity_Identifier_Code2']):
-            results.append("Pass")
-        else:
+        tests.append("Entity Identifier Code should be DB , MF or SU")
+        ents = out1.columns.intersection(['Entity_Identifier_Code1', 'Entity_Identifier_Code2'])
+        failed = False
+        for e in ents:
+            if any(c not in ['DB','MF', 'SU'] for c in out1[e]):
+                failed = True
+        if failed:
             results.append("Fail") 
+        else:
+            results.append("Pass") 
             
     if not file852:
         idquals = out1.columns.intersection(['Identification_Code_Qualifier1', 'Identification_Code_Qualifier2',
                                           'Identification_Code_Qualifier3'])
-        tests.append("Identification Code Qualifier should be one of 11, 21, UL, 1, 92")
+        tests.append("Identification Code Qualifier should be one of '11','21','UL','1','91','92','ZZ'")
+        failed= False
         for q in idquals:
-            if any(c not in ['11','21','UL','1','92'] for c in out1[q]):
-                results.append("Fail")
+            if any(c not in ['11','21','UL','1','91','92','ZZ',''] for c in out1[q]):
+                failed = True            
+        if failed:
+            results.append("Fail") 
         else:
-                results.append("Pass")        
+            results.append("Pass")         
     
     if 'State_Province_Code' in out1:
         tests.append("State recognized as a valid US state")
@@ -344,8 +365,20 @@ def QC_checks(out1, file852):
             
     return pd.DataFrame({'tests':tests, 'results':results})
 
-def sendlogs(logs):
-    print(logs)
+# def sendlogs(logs):
+#     print(logs)
+#     webhook_url = YOUR_WEBHOOK_URL_HERE
+#     slack_data = {'text': "My first Slack message yay"}
+#     response = requests.post(
+#         webhook_url, data ​=json.dumps(slack_data),
+#         headers={'Content-Type': 'application/json'}
+#     )
+#     if response.status_code != 200:
+#         raise ValueError(
+#             'Request to slack returned an error %s, the response is:\n%s'
+#             % (response.status_code, response.text)
+#     )
+
     
 
 # Get input file name from command line and read it 
